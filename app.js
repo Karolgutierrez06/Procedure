@@ -1,52 +1,101 @@
-document.getElementById('formSolicitudProcedimiento').addEventListener('submit', function(event) {
+document.getElementById('formRegistroProcedimiento').addEventListener('submit', function(event) {
   event.preventDefault();
 
-  // Obtener los valores del formulario
+  // Obtener datos del formulario (ajusta los IDs si es necesario)
   const nombrePaciente    = document.getElementById('nombrePaciente').value;
-  const fechaConsulta     = document.getElementById('fechaConsulta').value;
-  const nombreMedico      = document.getElementById('nombreMedico').value;
-  const cedulaMedico      = document.getElementById('cedulaMedico').value;
-  const diagnostico       = document.getElementById('diagnostico').value;
-  const procedimiento     = document.getElementById('procedimiento').value;
-  const justificacion     = document.getElementById('justificacion').value;
-  const fechaOpcion1      = document.getElementById('fechaOpcion1').value;
-  const fechaOpcion2      = document.getElementById('fechaOpcion2').value;
-  const fechaOpcion3      = document.getElementById('fechaOpcion3').value;
-  const horarioPreferente = document.getElementById('horarioPreferente').value;
+  const pacienteId        = document.getElementById('pacienteId').value;       // ID del recurso Patient
+  const nombreCirujano    = document.getElementById('nombreCirujano').value;
+  const cirujanoId        = document.getElementById('cirujanoId').value;       // ID del Practitioner
+  const fechaProcedimiento = document.getElementById('fechaProcedimiento').value;  // formato ISO date-time
+  const codigoProcedimiento = document.getElementById('codigoProcedimiento').value; // Ejemplo SNOMED
+  const resultadoProcedimiento = document.getElementById('resultadoProcedimiento').value;
+  
+  // Datos para prescripción simple de medicamento
+  const medicamentoNombre = document.getElementById('medicamentoNombre').value;
+  const dosis             = document.getElementById('dosis').value;
+  const frecuencia        = document.getElementById('frecuencia').value;
 
-  // Construir el objeto con los datos de la solicitud médica
-  const serviceRequestData = {
-    paciente: nombrePaciente,
-    fechaConsulta: fechaConsulta,
-    medico: nombreMedico,
-    cedulaMedico: cedulaMedico,
-    diagnostico: diagnostico,
-    procedimiento: procedimiento,
-    justificacion: justificacion,
-    fechasDisponibles: [fechaOpcion1, fechaOpcion2, fechaOpcion3],
-    horarioPreferente: horarioPreferente
+  // Crear objeto Procedure FHIR
+  const procedureFHIR = {
+    resourceType: "Procedure",
+    status: "completed",
+    code: {
+      coding: [
+        {
+          system: "http://snomed.info/sct",
+          code: codigoProcedimiento,
+          display: "Procedimiento quirúrgico"
+        }
+      ],
+      text: "Procedimiento quirúrgico"
+    },
+    subject: {
+      reference: `Patient/${pacienteId}`,
+      display: nombrePaciente
+    },
+    performer: [
+      {
+        actor: {
+          reference: `Practitioner/${cirujanoId}`,
+          display: nombreCirujano
+        }
+      }
+    ],
+    performedDateTime: fechaProcedimiento,
+    note: [
+      {
+        text: resultadoProcedimiento
+      }
+    ]
   };
 
-  console.log('Datos de la solicitud:', serviceRequestData);
+  // Crear objeto MedicationRequest FHIR para prescripción simple
+  const medicationRequestFHIR = {
+    resourceType: "MedicationRequest",
+    status: "active",
+    intent: "order",
+    medicationCodeableConcept: {
+      text: medicamentoNombre
+    },
+    subject: {
+      reference: `Patient/${pacienteId}`,
+      display: nombrePaciente
+    },
+    dosageInstruction: [
+      {
+        text: `Dosis: ${dosis}, Frecuencia: ${frecuencia}`
+      }
+    ],
+    authoredOn: new Date().toISOString(),
+    requester: {
+      reference: `Practitioner/${cirujanoId}`,
+      display: nombreCirujano
+    }
+  };
 
-  // Enviar la solicitud al backend (con trailing slash)
-  fetch('https://hl7-fhir-ehr-karol-1.onrender.com/service-request/', {
+  // Construir payload para enviar al backend (puedes enviar ambos recursos juntos o separados según API)
+  const payload = {
+    procedure: procedureFHIR,
+    medicationRequest: medicationRequestFHIR
+  };
+
+  console.log('Datos para registrar procedimiento:', payload);
+
+  fetch('https://hl7-fhir-ehr-karol-1.onrender.com/procedure/', {  // Ajusta endpoint si es necesario
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(serviceRequestData)
+    body: JSON.stringify(payload)
   })
   .then(response => {
-    if (!response.ok) {
-      throw new Error('Error en la solicitud: ' + response.statusText);
-    }
+    if (!response.ok) throw new Error('Error en la solicitud: ' + response.statusText);
     return response.json();
   })
   .then(data => {
-    console.log('Success:', data);
-    alert('Solicitud de procedimiento creada exitosamente! ID: ' + data._id);
+    console.log('Procedimiento registrado:', data);
+    alert('Procedimiento quirúrgico registrado exitosamente! ID: ' + (data._id || 'desconocido'));
   })
   .catch(error => {
     console.error('Error:', error);
-    alert('Hubo un error en la solicitud: ' + error.message);
+    alert('Error al registrar procedimiento: ' + error.message);
   });
 });
